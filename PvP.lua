@@ -1,23 +1,33 @@
---// LOAD RAYFIELD
+--// LOAD
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 --// WINDOW
 local Window = Rayfield:CreateWindow({
     Name = "PvP Menu",
     LoadingTitle = "PvP Menu",
-    LoadingSubtitle = "by Luiz",
+    LoadingSubtitle = "v2",
     ConfigurationSaving = {
         Enabled = true,
         FileName = "PvPMenu"
     }
 })
 
---// TAB
+--// TABS
 local CombatTab = Window:CreateTab("Combat", 4483362458)
+local HitboxTab = Window:CreateTab("Hitbox", 4483362458)
+
+--// SERVICES
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+local LP = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
 --// VARIABLES
 local hitboxEnabled = false
 local hitboxSize = 4
+local hitboxTransparency = 0.5
 
 local autoFire = false
 local targetPart = "Head"
@@ -25,105 +35,101 @@ local targetPart = "Head"
 local teamCheck = false
 local wallCheck = false
 
-local highlightEnabled = true
-
---// HITBOX EXPANDER
-CombatTab:CreateToggle({
+--// HITBOX ABA
+HitboxTab:CreateToggle({
     Name = "Hitbox Expander",
     CurrentValue = false,
-    Flag = "HitboxToggle",
-    Callback = function(Value)
-        hitboxEnabled = Value
-    end,
+    Callback = function(v)
+        hitboxEnabled = v
+    end
 })
 
-CombatTab:CreateSlider({
-    Name = "Hitbox Size",
+HitboxTab:CreateSlider({
+    Name = "Size",
     Range = {4, 50},
     Increment = 1,
-    Suffix = "Size",
     CurrentValue = 4,
-    Flag = "HitboxSize",
-    Callback = function(Value)
-        hitboxSize = Value
-    end,
+    Callback = function(v)
+        hitboxSize = v
+    end
 })
 
---// AUTO FIRE
+HitboxTab:CreateSlider({
+    Name = "Transparency",
+    Range = {5, 10}, -- 0.5 até 1.0
+    Increment = 1,
+    CurrentValue = 5,
+    Callback = function(v)
+        hitboxTransparency = v / 10
+    end
+})
+
+--// COMBAT ABA
 CombatTab:CreateToggle({
     Name = "Auto Fire",
     CurrentValue = false,
-    Flag = "AutoFire",
-    Callback = function(Value)
-        autoFire = Value
-    end,
+    Callback = function(v)
+        autoFire = v
+    end
 })
 
 CombatTab:CreateDropdown({
-    Name = "Target Part",
+    Name = "Target",
     Options = {"Head", "HumanoidRootPart"},
     CurrentOption = "Head",
-    Flag = "TargetPart",
-    Callback = function(Value)
-        targetPart = Value
-    end,
+    Callback = function(v)
+        targetPart = v
+    end
 })
 
---// CHECKS
 CombatTab:CreateToggle({
     Name = "Team Check",
     CurrentValue = false,
-    Flag = "TeamCheck",
-    Callback = function(Value)
-        teamCheck = Value
-    end,
+    Callback = function(v)
+        teamCheck = v
+    end
 })
 
 CombatTab:CreateToggle({
     Name = "Wall Check",
     CurrentValue = false,
-    Flag = "WallCheck",
-    Callback = function(Value)
-        wallCheck = Value
-    end,
+    Callback = function(v)
+        wallCheck = v
+    end
 })
 
---// SERVICES
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local LP = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
-
---// FUNCTION: GET TARGET
+--// TARGET SYSTEM (IA simples)
 local function getTarget()
     local closest = nil
-    local shortestDistance = math.huge
+    local dist = math.huge
 
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LP and player.Character and player.Character:FindFirstChild(targetPart) then
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character and p.Character:FindFirstChild(targetPart) then
             
-            if teamCheck and player.Team == LP.Team then
+            if teamCheck and p.Team == LP.Team then
                 continue
             end
 
-            local part = player.Character[targetPart]
-            local pos, visible = Camera:WorldToViewportPoint(part.Position)
+            local part = p.Character[targetPart]
+            local screenPos, visible = Camera:WorldToViewportPoint(part.Position)
 
             if visible then
-                local distance = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+                local magnitude = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
 
-                if distance < shortestDistance then
+                if magnitude < dist then
                     if wallCheck then
-                        local ray = Ray.new(Camera.CFrame.Position, (part.Position - Camera.CFrame.Position).Unit * 500)
-                        local hit = workspace:FindPartOnRay(ray, LP.Character)
+                        local ray = workspace:Raycast(
+                            Camera.CFrame.Position,
+                            (part.Position - Camera.CFrame.Position).Unit * 500
+                        )
 
-                        if hit and not hit:IsDescendantOf(player.Character) then
+                        if ray and not ray.Instance:IsDescendantOf(p.Character) then
                             continue
                         end
                     end
 
-                    shortestDistance = distance
-                    closest = player
+                    dist = magnitude
+                    closest = p
                 end
             end
         end
@@ -134,13 +140,13 @@ end
 
 --// HITBOX LOOP
 RunService.RenderStepped:Connect(function()
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LP and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = player.Character.HumanoidRootPart
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = p.Character.HumanoidRootPart
 
             if hitboxEnabled then
                 hrp.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
-                hrp.Transparency = 0.5
+                hrp.Transparency = hitboxTransparency
                 hrp.CanCollide = false
             else
                 hrp.Size = Vector3.new(2,2,1)
@@ -150,52 +156,21 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
---// HIGHLIGHT
-local highlights = {}
-
-local function updateHighlight(player, canShoot)
-    if not player.Character then return end
-
-    if not highlights[player] then
-        local hl = Instance.new("Highlight")
-        hl.Parent = player.Character
-        highlights[player] = hl
-    end
-
-    highlights[player].FillColor = canShoot and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
-end
-
---// AUTO FIRE LOOP
+--// AUTO FIRE MELHORADO
 RunService.RenderStepped:Connect(function()
     if not autoFire then return end
 
     local target = getTarget()
+    if not target or not target.Character then return end
 
-    if target and target.Character and target.Character:FindFirstChild(targetPart) then
-        local part = target.Character[targetPart]
+    local part = target.Character:FindFirstChild(targetPart)
+    if not part then return end
 
-        -- AIM
-        Camera.CFrame = CFrame.new(Camera.CFrame.Position, part.Position)
+    -- AIM
+    Camera.CFrame = CFrame.new(Camera.CFrame.Position, part.Position)
 
-        -- CHECK SHOOT POSSIBILITY
-        local canShoot = true
-
-        if wallCheck then
-            local ray = Ray.new(Camera.CFrame.Position, (part.Position - Camera.CFrame.Position).Unit * 500)
-            local hit = workspace:FindPartOnRay(ray, LP.Character)
-
-            if hit and not hit:IsDescendantOf(target.Character) then
-                canShoot = false
-            end
-        end
-
-        updateHighlight(target, canShoot)
-
-        -- FIRE (simula clique)
-        if canShoot then
-            mouse1press()
-            task.wait()
-            mouse1release()
-        end
-    end
+    -- DISPARO COMPATÍVEL (FUNCIONA MELHOR)
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+    task.wait()
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
 end)
